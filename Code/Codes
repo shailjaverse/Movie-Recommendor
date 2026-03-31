@@ -1,0 +1,227 @@
+import pandas as pd
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+
+# STEP 1: Create the Movie Dataset
+
+# Using a small sample of MovieLens-style data
+# In real projects, you'd load the full MovieLens CSV
+
+data = {
+    'title': [
+        'Toy Story', 'Jumanji', 'Heat', 'GoodFellas',
+        'The Shawshank Redemption', 'Pulp Fiction', 'The Dark Knight',
+        'Inception', 'Interstellar', 'The Matrix', 'Fight Club',
+        'Forrest Gump', 'The Lion King', 'Aladdin', 'Beauty and the Beast',
+        'Home Alone', 'Speed', 'Die Hard', 'The Terminator', 'Aliens',
+        'Braveheart', "Schindler's List", 'Saving Private Ryan', 'Titanic',
+        'Pretty Woman', 'Se7en', 'The Silence of the Lambs', 'Scream',
+        'Jurassic Park', 'Back to the Future', 'Groundhog Day',
+        'Toy Story 2', "A Bug's Life", 'Mulan'
+    ],
+    'genres': [
+        'Animation Children Comedy Fantasy',
+        'Adventure Children Fantasy',
+        'Action Crime Thriller',
+        'Crime Drama',
+        'Crime Drama',
+        'Crime Drama Thriller',
+        'Action Crime Drama Thriller',
+        'Action Crime Drama Mystery SciFi Thriller',
+        'Adventure Drama SciFi',
+        'Action SciFi Thriller',
+        'Drama Thriller Mystery',
+        'Comedy Drama Romance',
+        'Animation Adventure Children Drama Musical',
+        'Animation Adventure Children Comedy Fantasy Musical Romance',
+        'Animation Children Fantasy Musical Romance',
+        'Children Comedy',
+        'Action Romance Thriller',
+        'Action Crime Thriller',
+        'Action SciFi Thriller',
+        'Action Adventure SciFi Thriller',
+        'Action Drama War',
+        'Drama War',
+        'Action Drama War',
+        'Drama Romance',
+        'Comedy Drama Romance',
+        'Crime Mystery Thriller',
+        'Crime Horror Thriller',
+        'Horror Mystery Thriller',
+        'Action Adventure SciFi Thriller',
+        'Adventure Comedy SciFi',
+        'Comedy Fantasy Romance',
+        'Animation Adventure Children Comedy Fantasy',
+        'Animation Adventure Children Comedy',
+        'Animation Adventure Children Comedy Drama Musical Romance War'
+    ]
+}
+
+# Load into a DataFrame
+df = pd.DataFrame(data)
+
+print("=" * 55)
+print("       MOVIE RECOMMENDATION SYSTEM")
+print("       Content-Based Filtering | Cosine Similarity")
+print("=" * 55)
+print(f"\n📦 Dataset loaded: {len(df)} movies\n")
+
+
+
+# STEP 2: Build the Feature Matrix
+
+# CountVectorizer converts genre strings into a matrix
+# where each column = one genre, each row = one movie
+# A value of 1 means the movie has that genre, 0 means it doesn't
+
+cv = CountVectorizer()
+genre_matrix = cv.fit_transform(df['genres'])
+
+print(f"🎭 Total unique genres found: {len(cv.get_feature_names_out())}")
+print(f"📊 Genre feature matrix shape: {genre_matrix.shape}")
+print(f"   (rows = movies, columns = genres)\n")
+
+
+
+# STEP 3: Compute Cosine Similarity
+
+# Cosine similarity measures the angle between two vectors
+# Score of 1.0 = identical genres, 0.0 = completely different
+
+similarity_matrix = cosine_similarity(genre_matrix)
+
+print("✅ Cosine similarity matrix computed!")
+print(f"   Matrix shape: {similarity_matrix.shape}\n")
+
+
+
+# STEP 4: Recommendation Function
+
+
+def recommend_movies(movie_title, num_recommendations=5):
+    """
+    Returns top N similar movies for a given movie title.
+
+    Parameters:
+    -----------
+    movie_title : str
+        Name of the movie to base recommendations on
+    num_recommendations : int
+        Number of similar movies to return (default = 5)
+
+    Returns:
+    --------
+    DataFrame with recommended movies and similarity scores
+    """
+
+    # Find the movie in our dataset (case-insensitive)
+    matches = df[df['title'].str.lower() == movie_title.strip().lower()]
+
+    if matches.empty:
+        print(f"❌ Movie '{movie_title}' not found in dataset.")
+        print("   Try one of these:", ', '.join(df['title'].tolist()[:5]), "...")
+        return None
+
+    # Get the index of the input movie
+    movie_index = matches.index[0]
+
+    # Get similarity scores for this movie vs all others
+    similarity_scores = list(enumerate(similarity_matrix[movie_index]))
+
+    # Sort by similarity score (highest first), exclude the movie itself
+    similarity_scores = sorted(similarity_scores, key=lambda x: x[1], reverse=True)
+    similarity_scores = [(i, score) for i, score in similarity_scores if i != movie_index]
+
+    # Pick top N recommendations
+    top_movies = similarity_scores[:num_recommendations]
+
+    # Build results DataFrame
+    results = pd.DataFrame({
+        'Rank': range(1, num_recommendations + 1),
+        'Movie Title': [df.iloc[i]['title'] for i, _ in top_movies],
+        'Genres': [df.iloc[i]['genres'] for i, _ in top_movies],
+        'Similarity Score': [round(score, 4) for _, score in top_movies]
+    })
+
+    results = results.set_index('Rank')
+    return results
+
+
+
+# STEP 5: Run the Recommender
+
+def run_recommender():
+    """Interactive loop to get movie recommendations."""
+
+    print("─" * 55)
+    print("  MOVIE RECOMMENDER — Enter a movie to get suggestions")
+    print("─" * 55)
+
+    while True:
+        print("\nAvailable movies (sample):")
+        for i, title in enumerate(df['title'].tolist()):
+            print(f"  {i+1:2}. {title}")
+
+        print("\n" + "─" * 55)
+        movie_name = input("\n🎬 Enter movie name (or 'quit' to exit): ").strip()
+
+        if movie_name.lower() in ['quit', 'exit', 'q']:
+            print("\n👋 Thanks for using Movie Recommender! Goodbye.\n")
+            break
+
+        if not movie_name:
+            print("⚠️  Please enter a movie name.")
+            continue
+
+        print(f"\n🔍 Finding movies similar to: '{movie_name}'...\n")
+        recommendations = recommend_movies(movie_name, num_recommendations=5)
+
+        if recommendations is not None:
+            input_movie = df[df['title'].str.lower() == movie_name.lower()].iloc[0]
+            print(f"🎥 Input Movie : {input_movie['title']}")
+            print(f"🎭 Genres      : {input_movie['genres']}")
+            print("\n📽️  Top 5 Recommended Movies:")
+            print("─" * 55)
+            print(recommendations.to_string())
+            print("─" * 55)
+
+        print("\nWant another recommendation? (Press Enter to continue)")
+        again = input()
+        if again.lower() in ['no', 'n', 'quit', 'exit']:
+            print("\n👋 Thanks for using Movie Recommender! Goodbye.\n")
+            break
+
+
+
+# STEP 6: Demo — Quick Test (No Input Needed)
+
+
+def demo():
+    """Run a quick demo without user input."""
+    test_movies = ['Toy Story', 'The Dark Knight', 'Titanic']
+
+    for movie in test_movies:
+        print(f"\n{'─'*55}")
+        print(f"  Recommendations for: {movie}")
+        print(f"{'─'*55}")
+        result = recommend_movies(movie)
+        if result is not None:
+            print(result.to_string())
+
+
+
+# MAIN — Choose mode: demo or interactive
+
+
+if __name__ == "__main__":
+    print("\nChoose mode:")
+    print("  1 → Demo (automatic, no input needed)")
+    print("  2 → Interactive (enter movie names yourself)")
+
+    choice = input("\nEnter 1 or 2: ").strip()
+
+    if choice == '1':
+        demo()
+    else:
+        run_recommender()                                                                                                                                        give me read me of this code    also small description
